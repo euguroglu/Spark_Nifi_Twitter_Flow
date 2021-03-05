@@ -23,7 +23,7 @@ if __name__ == "__main__":
     kafka_df = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", "localhost:9092") \
-        .option("subscribe", "twitter8") \
+        .option("subscribe", "twitter9") \
         .option("startingOffsets", "earliest") \
         .load()
 
