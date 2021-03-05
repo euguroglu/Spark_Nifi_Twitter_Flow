@@ -83,9 +83,9 @@ value_df = kafka_df.select(from_json(col("value").cast("string"),schema).alias("
 
 To implement this project yourself you need to apply twitter developer account first. You can use [link](https://developer.twitter.com/en/apply-for-access) to submit an application. Then you can follow steps mentioned on the task list above.
 
-kafka_tweet_producer.py is used to connect Twitter API with the Apache Kafka as well as filtering streams accourding to given hashtag.
+Nifi processors are used to connect Twitter API with the Apache Kafka as well as filtering streams accourding to given hashtag. And finally consuming kafka topic which is inserted by spark stream to update cassandra database
 
-twitter_structured_stream_spark_kafka_console.py  is used to create sparksession to read from Kafka topic and make necessary transformations on the data. Finally we are printing outputs to the console
+twitter_structured_stream_nifi_spark_kafka_cassandra.py  is used to create sparksession to read from Kafka topic and make necessary transformations on the data. Finally we are streaming data to kafka consumer topic.
 
 ### Running
 
@@ -97,13 +97,11 @@ zookeeper-server-start.bat config\zookeeper.properties (zookeeper-server-start.s
 ```
 kafka-server-start.bat config\server.properties  (kafka-server-start.sh for linux)
  ```
-3. Execute below code first
+3. Start nifi (run-nifi.bat for windows, nifi.sh for linux)
+4. Start processors
+5. Finally execute below code
 ```
-spark-submit kafka_tweet_producer.py
-```
-4. Finally execute below code
-```
-spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.1 twitter_structured_stream_spark_kafka_console.py
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.0.1 twitter_structured_stream_nifi_spark_kafka_cassandra.py
 ```
 Note that we added spark kafka integration package taken from maven respository, if you already added this one into your spark conf you can skip that part.
 
