@@ -1,46 +1,25 @@
 # Spark_Kafka_Stream_Twitter
 ### Dataflow Pipeline
-![](pipeline_tweet.JPG)
+![](pipeline.JPG)
 
 ### Task List
 
 - [x] Create twitter developer account
-- [x] Install pykafka (pykafka==2.8.0)
-- [x] Install tweepy (tweepy==3.10.0)
-- [x] Set account configurations on twitter_config.py
+- [x] Install nifi and insert below processors
+![](nifi_pipeline.JPG)
 
-```
-consumer_key = 'TWITTER_APP_CONSUMER_KEY'
-consumer_secret = 'TWITTER_APP_CONSUMER_SECRET'
-access_token = 'TWITTER_APP_ACCESS_TOKEN'
-access_secret = 'TWITTER_APP_ACCESS_SECRET'
-```
+- [x] Double click to GetTwitter processor and insert keys as well as tweet you are going to search
+![](GetTwitter.JPG)
 
-- [x] Create kafka push class inherited from StreamListener
-```
-class KafkaPushListener(StreamListener):
-	def __init__(self):
-		#localhost:9092 = Default Zookeeper Producer Host and Port Adresses
-		self.client = pykafka.KafkaClient("localhost:9092")
+- [x] Double click to PublishKafka processor and insert topic name, broker port 
+![](pkafka.JPG)
 
-		#Get Producer that has topic name is Twitter
-		self.producer = self.client.topics[bytes("twitter", "ascii")].get_producer()
+- [x] Double click to ConsumeKafka processor and insert topic name, broker port
+![](ckafka.JPG)
 
-	def on_data(self, data):
-		#Producer produces data for consumer
-		#Data comes from Twitter
-		self.producer.produce(bytes(data, "ascii"))
-		return True
+- [x] Double click to PutCassandraRecord processor and insert contact point, key point, table name, Record Reader
+![](cassandra.JPG)
 
-	def on_error(self, status):
-		print(status)
-		return True
-```
-
-- [x] Set #hashtag which you want to track
-```
-twitter_stream.filter(track=['#EnesUguroglu'])
-```
 - [x] Create spark session
 ```
     spark = SparkSession \
@@ -54,13 +33,10 @@ twitter_stream.filter(track=['#EnesUguroglu'])
 ```
     #Preparing schema for tweets
     schema = StructType([
-        StructField("created_at", StringType()),
-        StructField("id_str",IntegerType()),
     	StructField("text", StringType()),
         StructField("user", StructType([
-            StructField("id",IntegerType()),
-            StructField("name",StringType()),
-            StructField("location",StringType())
+            StructField("id",StringType()),
+            StructField("name",StringType())
         ])),
     ])
  ```
@@ -70,7 +46,7 @@ twitter_stream.filter(track=['#EnesUguroglu'])
     kafka_df = spark.readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", "localhost:9092") \
-        .option("subscribe", "twitter") \
+        .option("subscribe", "twitter9") \
         .option("startingOffsets", "earliest") \
         .load()
 ```
@@ -80,23 +56,25 @@ value_df = kafka_df.select(from_json(col("value").cast("string"),schema).alias("
 ```
 - [x] Create structure using Spark DataFrame functions
 ```
-    explode_df = value_df.selectExpr("value.created_at", "value.id_str", "value.text",
-                                     "value.user.id", "value.user.name", "value.user.location")
+    explode_df = value_df.selectExpr("value.text",
+                                     "value.user.id", "value.user.name")
 
-    #explode_df.printSchema()
-    #Converting created_at column to timestamp
-    final_df = explode_df \
-        .withColumn("created_at", to_timestamp(col("created_at"), "yyyy-MM-dd HH:mm:ss"))
+    kafka_target_df = explode_df.selectExpr("id as key",
+                                                 "to_json(struct(*)) as value")
 ```
-- [x] Write stream to the console
+- [x] Write stream to the kafka consumer
 ```
-    console_query = final_df.writeStream \
-    .format("console") \
-    .outputMode("append") \
-    .option("checkpointLocation", "chk-point-dir") \
-    .trigger(processingTime="1 minute") \
-    .start()
+    nifi_query = kafka_target_df \
+            .writeStream \
+            .queryName("Notification Writer") \
+            .format("kafka") \
+            .option("kafka.bootstrap.servers", "localhost:9092") \
+            .option("topic", "TwitterConsume") \
+            .outputMode("append") \
+            .option("checkpointLocation", "chk-point-dir") \
+            .start()
 
+    nifi_query.awaitTermination()
     console_query.awaitTermination()
  ```
 - [ ] Write stream to the cassandra
